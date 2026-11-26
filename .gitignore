@@ -1,0 +1,14 @@
+# 작성: 2026-11-26 10:22 KST
+
+# 환경 변수 파일 (비밀값 포함, 절대 올리지 않음)
+.env
+.env.*
+!.env.example
+
+# Claude Code 개인 설정
+.claude/settings.local.json
+
+# 운영체제 부산물
+Thumbs.db
+desktop.ini
+.DS_Store
