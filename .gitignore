@@ -12,3 +12,18 @@
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# Next.js 산출물
+/node_modules
+/.next/
+/out/
+/build
+/coverage
+*.tsbuildinfo
+next-env.d.ts
+npm-debug.log*
+.vercel
+*.pem
+
+# QA 시험 PDF 출력 폴더 (scripts/make-qa-pdfs.mjs 출력용)
+/qa-pdfs/
