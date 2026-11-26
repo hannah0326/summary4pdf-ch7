@@ -2,7 +2,7 @@
 // 한 페이지 화면: 업로드 -> 처리 중 -> 결과 / 오류
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ErrorBox } from "@/components/error-box";
 import { ProgressNote } from "@/components/progress-note";
 import { SummaryView } from "@/components/summary-view";
@@ -14,12 +14,28 @@ import { DEFAULT_LENGTH, type Summary, type SummaryLength } from "@/lib/types";
 // 오류 뒤 [다시 시도]가 하는 일: 같은 파일을 다시 보내거나, 고칠 수 없는 파일이면 처음으로
 type Failure = { message: string; retry: "submit" | "reset" };
 
+// 서버 쪽 일시 오류(E7)와 연결 오류만 같은 파일을 다시 보내고, 그 밖(E1~E6)은 처음 화면으로 돌아간다
+function failureOf(code: string, message: string): Failure {
+  return { message, retry: code === "E7" || code === "NETWORK" ? "submit" : "reset" };
+}
+
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [length, setLength] = useState<SummaryLength>(DEFAULT_LENGTH);
   const [busy, setBusy] = useState(false);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
+
+  // 드롭 영역 밖에 놓은 파일을 브라우저가 열어 버리면 화면(결과)을 잃으므로 기본 동작을 막는다
+  useEffect(() => {
+    const prevent = (e: DragEvent) => e.preventDefault();
+    window.addEventListener("dragover", prevent);
+    window.addEventListener("drop", prevent);
+    return () => {
+      window.removeEventListener("dragover", prevent);
+      window.removeEventListener("drop", prevent);
+    };
+  }, []);
 
   async function run(target: File | null) {
     if (busy) return;
@@ -29,25 +45,26 @@ export default function Home() {
     }
     setBusy(true);
     setFailure(null);
+    // 결과 화면에서 다시 요약하다 실패하면 이전 요약을 지우지 않고 그 위에 오류를 보여 준다
+    const keepSummary = summary !== null;
     try {
       const check = await precheckFile(target);
       if (!check.ok) {
-        setFile(null);
-        setSummary(null);
-        setFailure({ message: check.message, retry: "reset" });
+        if (!keepSummary) setFile(null);
+        setFailure(failureOf(check.code, check.message));
         return;
       }
       const result = await postSummarize(target, length);
       if (result.ok) {
         setSummary(result.summary);
       } else {
-        setSummary(null);
-        setFailure({ message: result.message, retry: "submit" });
+        if (!keepSummary) setSummary(null);
+        setFailure(failureOf(result.code, result.message));
       }
     } catch {
       // 예상하지 못한 예외도 진행 표시가 남지 않게 오류로 바꾼다
-      setSummary(null);
-      setFailure({ message: errorMessage("E7"), retry: "submit" });
+      if (!keepSummary) setSummary(null);
+      setFailure(failureOf("E7", errorMessage("E7")));
     } finally {
       setBusy(false);
     }
@@ -64,15 +81,24 @@ export default function Home() {
       <h1 className="text-2xl font-bold">PDF 요약</h1>
 
       {summary && file ? (
-        <SummaryView
-          summary={summary}
-          fileName={file.name}
-          busy={busy}
-          length={length}
-          onLength={setLength}
-          onResummarize={() => run(file)}
-          onReset={reset}
-        />
+        <>
+          {failure && (
+            <ErrorBox
+              message={failure.message}
+              disabled={busy}
+              onRetry={() => (failure.retry === "submit" ? run(file) : reset())}
+            />
+          )}
+          <SummaryView
+            summary={summary}
+            fileName={file.name}
+            busy={busy}
+            length={length}
+            onLength={setLength}
+            onResummarize={() => run(file)}
+            onReset={reset}
+          />
+        </>
       ) : (
         <>
           {failure && (
