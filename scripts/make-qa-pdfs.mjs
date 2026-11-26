@@ -1,5 +1,6 @@
 // 작성: 2026-11-26 11:50 KST
 // QA용 PDF 생성기 (직접 만든 내용만 사용). 사용: node scripts/make-qa-pdfs.mjs <출력 폴더>
+// 출력 폴더는 git이 무시하는 위치(예: qa-pdfs)를 쓴다. .gitignore에 /qa-pdfs/가 등록돼 있다.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { PDFDocument, StandardFonts } from "pdf-lib";
