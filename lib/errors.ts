@@ -37,7 +37,7 @@ export function errorMessage(
     case "E2": {
       const size =
         detail?.sizeBytes !== undefined
-          ? `(${(detail.sizeBytes / 1024 / 1024).toFixed(1)}MB)`
+          ? `(${(Math.ceil((detail.sizeBytes / 1024 / 1024) * 10) / 10).toFixed(1)}MB)`
           : "";
       return `파일이 너무 커요${size}. ${limitMb}MB 이하의 PDF를 올려 주세요.`;
     }
@@ -46,7 +46,7 @@ export function errorMessage(
     case "E4":
       return "파일을 열 수 없어요. 다른 PDF로 다시 시도해 주세요.";
     case "E5":
-      return "비밀번호가 걸린 PDF는 요약할 수 없어요.";
+      return "비밀번호가 걸린 PDF는 요약할 수 없어요. 비밀번호를 푼 PDF로 다시 올려 주세요.";
     case "E6":
       return "먼저 PDF를 골라 주세요.";
     case "E7":

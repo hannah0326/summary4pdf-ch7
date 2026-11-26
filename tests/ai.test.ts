@@ -1,7 +1,7 @@
 // 작성: 2026-11-26 12:40 KST
 // OpenRouter 요약: 자르기, 지시문, 응답 해석, 모델 전환 시험 (fetch는 가짜)
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MODELS, truncateText } from "@/lib/ai/config";
+import { estimateTokens, MAX_INPUT_TOKENS_EST, MODELS, truncateText } from "@/lib/ai/config";
 import { buildMessages } from "@/lib/ai/prompt";
 import { parseSummary } from "@/lib/ai/parse";
 import { summarize } from "@/lib/ai/summarize";
@@ -25,6 +25,18 @@ function kp(n: number) {
   return Array.from({ length: n }, (_, i) => ({ title: `t${i}`, detail: `d${i}` }));
 }
 
+describe("estimateTokens", () => {
+  it("한글·한자·가나는 1자 약 1, 그 밖은 약 0.25", () => {
+    expect(estimateTokens("가".repeat(100))).toBe(100);
+    expect(estimateTokens("漢".repeat(10))).toBe(10);
+    expect(estimateTokens("かナ")).toBe(2);
+    expect(estimateTokens("a".repeat(100))).toBe(25);
+  });
+  it("한글과 영어가 섞이면 각각 더한다", () => {
+    expect(estimateTokens("가".repeat(40) + "a".repeat(40))).toBe(50);
+  });
+});
+
 describe("truncateText", () => {
   it("한도 이하면 그대로", () => {
     expect(truncateText("가".repeat(10), 20)).toEqual({ text: "가".repeat(10), truncated: false });
@@ -33,12 +45,30 @@ describe("truncateText", () => {
     const r = truncateText("가".repeat(30), 20);
     expect(r.truncated).toBe(true);
     expect(r.text.length).toBeLessThanOrEqual(20);
+    expect(estimateTokens(r.text)).toBeLessThanOrEqual(20);
   });
   it("가능하면 마지막 문단 경계에서 자름", () => {
     const text = "첫 문단입니다.\n\n둘째 문단입니다.\n\n" + "셋".repeat(50);
     const r = truncateText(text, 30);
     expect(r.truncated).toBe(true);
     expect(r.text).toBe("첫 문단입니다.\n\n둘째 문단입니다.");
+  });
+  it("영어 12만 자는 잘리지 않고, 경계를 넘으면 잘린다", () => {
+    expect(truncateText("a".repeat(120_000)).truncated).toBe(false);
+    expect(truncateText("a".repeat(120_100)).truncated).toBe(true);
+  });
+  it("한글 3만 자 초과는 잘린다", () => {
+    expect(truncateText("가".repeat(30_000)).truncated).toBe(false);
+    const r = truncateText("가".repeat(30_001));
+    expect(r.truncated).toBe(true);
+    expect(estimateTokens(r.text)).toBeLessThanOrEqual(MAX_INPUT_TOKENS_EST);
+  });
+  it("한글+영어가 섞이면 추정치로 자르고 결과는 상한 이하", () => {
+    const text = ("가나다라 hello world ").repeat(5_000);
+    expect(estimateTokens(text)).toBeGreaterThan(MAX_INPUT_TOKENS_EST);
+    const r = truncateText(text);
+    expect(r.truncated).toBe(true);
+    expect(estimateTokens(r.text)).toBeLessThanOrEqual(MAX_INPUT_TOKENS_EST);
   });
 });
 
@@ -118,9 +148,9 @@ describe("summarize", () => {
   });
 
   it("요청 본문과 헤더: 1순위는 response_format 없음, 키는 헤더에만", async () => {
-    const fetchImpl = vi.fn(async (_url: unknown, _init?: RequestInit) => okResponse(goodJson));
+    const fetchImpl = vi.fn(async () => okResponse(goodJson));
     await summarize("본문", "short", { fetchImpl: fetchImpl as unknown as typeof fetch, apiKey: KEY });
-    const [url, init] = fetchImpl.mock.calls[0];
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     expect(String(url)).toBe("https://openrouter.ai/api/v1/chat/completions");
     expect((init!.headers as Record<string, string>).Authorization).toBe(`Bearer ${KEY}`);
     const body = JSON.parse(init!.body as string);
@@ -157,10 +187,10 @@ describe("summarize", () => {
 
   it("1순위 시간 초과 -> 2순위 호출", async () => {
     vi.useFakeTimers();
-    const fetchImpl = vi.fn((_url: unknown, init?: RequestInit) => {
+    const fetchImpl = vi.fn((...args: [unknown, RequestInit?]) => {
       if (fetchImpl.mock.calls.length === 1) {
         return new Promise<Response>((_res, rej) => {
-          init!.signal!.addEventListener("abort", () => rej(new DOMException("aborted", "AbortError")));
+          args[1]!.signal!.addEventListener("abort", () => rej(new DOMException("aborted", "AbortError")));
         });
       }
       return Promise.resolve(okResponse(goodJson));
@@ -212,5 +242,21 @@ describe("summarize", () => {
       if (saved !== undefined) process.env.OPENROUTER_API_KEY = saved;
     }
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("apiKey 없으면 missing_api_key 로그 한 줄을 남기고 키 값은 남기지 않는다", async () => {
+    const saved = process.env.OPENROUTER_API_KEY;
+    delete process.env.OPENROUTER_API_KEY;
+    try {
+      await summarize("본문", "medium", { fetchImpl: vi.fn() as unknown as typeof fetch }).catch(() => undefined);
+    } finally {
+      if (saved !== undefined) process.env.OPENROUTER_API_KEY = saved;
+    }
+    const errCalls = (console.error as ReturnType<typeof vi.fn>).mock.calls;
+    expect(errCalls).toHaveLength(1);
+    const line = String(errCalls[0][0]);
+    expect(JSON.parse(line)).toEqual({ tag: "summarize", error: "missing_api_key" });
+    expect(line).not.toContain(KEY);
+    expect(line).not.toContain("본문");
   });
 });

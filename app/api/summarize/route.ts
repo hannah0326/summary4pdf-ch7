@@ -1,7 +1,7 @@
 // 작성: 2026-11-26 13:08 KST
 // POST /api/summarize: PDF 검사 -> 글자 추출 -> 길이 제한 -> AI 요약
 import { AppError, errorMessage, errorStatus } from "@/lib/errors";
-import { MAX_INPUT_CHARS, truncateText } from "@/lib/ai/config";
+import { MAX_INPUT_TOKENS_EST, truncateText } from "@/lib/ai/config";
 import { summarize } from "@/lib/ai/summarize";
 import { extractText } from "@/lib/pdf/extract";
 import { validateUpload } from "@/lib/pdf/validate";
@@ -41,7 +41,7 @@ export async function POST(request: Request): Promise<Response> {
 
     const bytes = await validateUpload(file);
     const { text } = await extractText(bytes);
-    const { text: input, truncated } = truncateText(text, MAX_INPUT_CHARS);
+    const { text: input, truncated } = truncateText(text, MAX_INPUT_TOKENS_EST);
     const summary = await summarize(input, length);
     return Response.json({ ...summary, truncated, length });
   } catch (e) {

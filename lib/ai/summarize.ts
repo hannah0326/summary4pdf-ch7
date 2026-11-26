@@ -28,7 +28,11 @@ export async function summarize(
   deps: SummarizeDeps = {},
 ): Promise<Summary> {
   const apiKey = deps.apiKey ?? process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new AppError("E7");
+  if (!apiKey) {
+    // 키가 없다는 사실만 남긴다(키 값은 절대 남기지 않는다).
+    console.error(JSON.stringify({ tag: "summarize", error: "missing_api_key" }));
+    throw new AppError("E7");
+  }
   const fetchImpl = deps.fetchImpl ?? fetch;
   const now = deps.now ?? Date.now;
 

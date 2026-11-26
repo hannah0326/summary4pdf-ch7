@@ -1,7 +1,7 @@
 // 작성: 2026-11-26 13:05 KST
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppError } from "@/lib/errors";
-import { MAX_INPUT_CHARS } from "@/lib/ai/config";
+import { MAX_INPUT_TOKENS_EST } from "@/lib/ai/config";
 import { MAX_FILE_BYTES, type Summary, type SummaryLength } from "@/lib/types";
 import { pdfBytesOfSize } from "./fixtures/make-fixtures";
 
@@ -82,11 +82,11 @@ describe("POST /api/summarize", () => {
   });
 
   it("한도를 넘는 글자는 잘라서 넘기고 truncated true", async () => {
-    extractMock.mockResolvedValue({ text: "가".repeat(MAX_INPUT_CHARS + 500), pages: 9 });
+    extractMock.mockResolvedValue({ text: "가".repeat(MAX_INPUT_TOKENS_EST + 500), pages: 9 });
     const res = await POST(req(pdfFile()));
     expect(res.status).toBe(200);
     expect((await res.json()).truncated).toBe(true);
-    expect(summarizeMock.mock.calls[0][0].length).toBeLessThanOrEqual(MAX_INPUT_CHARS);
+    expect(summarizeMock.mock.calls[0][0].length).toBeLessThanOrEqual(MAX_INPUT_TOKENS_EST);
   });
 
   it("extractText의 AppError는 해당 상태로 전달", async () => {
