@@ -3,7 +3,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { buildCopyText, TRUNCATED_NOTICE } from "@/lib/client/copy-text";
+import { buildCopyText, copyToClipboard, COPY_FAILED_MESSAGE, TRUNCATED_NOTICE } from "@/lib/client/copy-text";
 import { LengthPicker } from "@/components/length-picker";
 import { LENGTH_SPEC, type Summary, type SummaryLength } from "@/lib/types";
 
@@ -30,20 +30,16 @@ export function SummaryView({
   onResummarize: () => void;
   onReset: () => void;
 }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"ok" | "fail" | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
   async function copy() {
-    try {
-      await navigator.clipboard.writeText(buildCopyText(summary));
-    } catch {
-      return; // 복사 권한이 없으면 안내 문구를 바꾸지 않음
-    }
-    setCopied(true);
+    const ok = await copyToClipboard(buildCopyText(summary));
+    setCopied(ok ? "ok" : "fail");
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => setCopied(false), 2000);
+    timer.current = setTimeout(() => setCopied(null), ok ? 2000 : 4000);
   }
 
   return (
@@ -101,8 +97,11 @@ export function SummaryView({
           길이 바꿔 다시 요약
         </button>
         <button type="button" onClick={onReset} disabled={busy} className={BTN}>새 PDF 요약</button>
-        <span role="status" className="flex min-h-11 items-center text-sm text-green-800 dark:text-green-300">
-          {copied ? "복사했어요" : ""}
+        <span role="status" className={`flex min-h-11 items-center text-sm ${
+            copied === "fail" ? "text-red-800 dark:text-red-300" : "text-green-800 dark:text-green-300"
+          }`}
+        >
+          {copied === "ok" ? "복사했어요" : copied === "fail" ? COPY_FAILED_MESSAGE : ""}
         </span>
       </div>
 

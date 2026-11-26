@@ -15,3 +15,21 @@ export function buildCopyText(s: Summary): string {
   if (s.truncated) parts.push(`(${TRUNCATED_NOTICE})`);
   return parts.join("\n\n");
 }
+
+export const COPY_FAILED_MESSAGE = "복사하지 못했어요. 글을 직접 선택해 복사해 주세요.";
+
+/** 클립보드에 쓴다. 권한 거부·비보안 환경 등으로 쓰지 못하면 false */
+export async function copyToClipboard(
+  text: string,
+  clipboard: Pick<Clipboard, "writeText"> | undefined = typeof navigator === "undefined"
+    ? undefined
+    : navigator.clipboard,
+): Promise<boolean> {
+  if (!clipboard) return false;
+  try {
+    await clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}

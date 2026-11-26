@@ -56,14 +56,20 @@ export async function postSummarize(
   return { ok: false, code: "E7", message: errorMessage("E7") };
 }
 
-type PrecheckResult = { ok: true } | { ok: false; code: "E1" | "E2"; message: string };
+type PrecheckResult = { ok: true } | { ok: false; code: "E1" | "E2" | "E4"; message: string };
 
 /** 크기와 파일 머리(%PDF-)를 서버에 보내기 전에 확인 */
 export async function precheckFile(file: File): Promise<PrecheckResult> {
   if (file.size > MAX_FILE_BYTES) {
     return { ok: false, code: "E2", message: errorMessage("E2", { sizeBytes: file.size }) };
   }
-  const head = new Uint8Array(await file.slice(0, 5).arrayBuffer());
+  let head: Uint8Array;
+  try {
+    head = new Uint8Array(await file.slice(0, 5).arrayBuffer());
+  } catch {
+    // 선택 뒤 파일이 옮겨지거나 지워진 경우 등
+    return { ok: false, code: "E4", message: errorMessage("E4") };
+  }
   const isPdf = head.length === 5 && String.fromCharCode(...head) === "%PDF-";
   if (!isPdf) return { ok: false, code: "E1", message: errorMessage("E1") };
   return { ok: true };

@@ -1,7 +1,7 @@
 // 작성: 2026-11-26 13:40 KST
 // 화면용 보조 함수(postSummarize, precheckFile, buildCopyText) 시험
 import { describe, expect, it } from "vitest";
-import { buildCopyText } from "@/lib/client/copy-text";
+import { buildCopyText, copyToClipboard } from "@/lib/client/copy-text";
 import { postSummarize, precheckFile } from "@/lib/client/api";
 import { errorMessage } from "@/lib/errors";
 import { MAX_FILE_BYTES, type Summary } from "@/lib/types";
@@ -86,6 +86,30 @@ describe("precheckFile", () => {
   it("머리가 %PDF-가 아니면 E1", async () => {
     const r = await precheckFile(sized(100, "hello"));
     expect(r).toEqual({ ok: false, code: "E1", message: errorMessage("E1") });
+  });
+});
+
+describe("precheckFile 읽기 실패", () => {
+  it("파일을 읽지 못하면 거절하지 않고 E4 결과를 돌려준다", async () => {
+    const broken = {
+      size: 100,
+      slice: () => ({ arrayBuffer: () => Promise.reject(new Error("읽기 실패")) }),
+    } as unknown as File;
+    expect(await precheckFile(broken)).toEqual({ ok: false, code: "E4", message: errorMessage("E4") });
+  });
+});
+
+describe("copyToClipboard", () => {
+  it("성공하면 true", async () => {
+    let written = "";
+    expect(await copyToClipboard("글", { writeText: async (t: string) => void (written = t) })).toBe(true);
+    expect(written).toBe("글");
+  });
+  it("쓰기가 거절되면 false", async () => {
+    expect(await copyToClipboard("글", { writeText: () => Promise.reject(new Error("denied")) })).toBe(false);
+  });
+  it("clipboard가 없으면 false", async () => {
+    expect(await copyToClipboard("글", undefined)).toBe(false);
   });
 });
 

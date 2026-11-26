@@ -29,22 +29,28 @@ export default function Home() {
     }
     setBusy(true);
     setFailure(null);
-    const check = await precheckFile(target);
-    if (!check.ok) {
-      setFile(null);
+    try {
+      const check = await precheckFile(target);
+      if (!check.ok) {
+        setFile(null);
+        setSummary(null);
+        setFailure({ message: check.message, retry: "reset" });
+        return;
+      }
+      const result = await postSummarize(target, length);
+      if (result.ok) {
+        setSummary(result.summary);
+      } else {
+        setSummary(null);
+        setFailure({ message: result.message, retry: "submit" });
+      }
+    } catch {
+      // 예상하지 못한 예외도 진행 표시가 남지 않게 오류로 바꾼다
       setSummary(null);
-      setFailure({ message: check.message, retry: "reset" });
+      setFailure({ message: errorMessage("E7"), retry: "submit" });
+    } finally {
       setBusy(false);
-      return;
     }
-    const result = await postSummarize(target, length);
-    if (result.ok) {
-      setSummary(result.summary);
-    } else {
-      setSummary(null);
-      setFailure({ message: result.message, retry: "submit" });
-    }
-    setBusy(false);
   }
 
   function reset() {
